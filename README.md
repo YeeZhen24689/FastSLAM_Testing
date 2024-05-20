@@ -7,7 +7,7 @@ https://github.com/jacobhiggins/python_ugv_sim
 
 # Setting up the environment
 The main code file should be outside of the folder of which you downloaded the differential drive robot repo. 
-Environment folder
+Environment folder:
 |_ fastSLAM.py
 |_ venv
 |_ python_ugv_sim
