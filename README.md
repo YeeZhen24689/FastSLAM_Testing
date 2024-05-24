@@ -13,3 +13,5 @@ Environment folder: <br />
 |_ venv <br />
 |_ python_ugv_sim <br />
 |_ main.py <br />
+|_ Tracks <br />
+   |_ comp_2021.csv <br />
