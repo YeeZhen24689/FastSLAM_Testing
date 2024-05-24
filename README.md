@@ -12,3 +12,4 @@ Environment folder: <br />
 |_ fastSLAM.py <br />
 |_ venv <br />
 |_ python_ugv_sim <br />
+|_ main.py <br />
