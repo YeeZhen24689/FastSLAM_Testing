@@ -1,9 +1,12 @@
 import pygame
 import pygame.gfxdraw
-from python_ugv_sim.utils import vehicles, environment
+from main import N_LM
 import math
 import numpy as np
 from copy import deepcopy
+import os
+
+clear = lambda : os.system('cls')
 
 # Fast SLAM covariance
 Q = np.diag([3.0, np.deg2rad(10.0)])**2
@@ -18,7 +21,7 @@ OFFSET_YAWRATE_NOISE = 0.01
 landmark_radius = 0.2
 robot_fov = 2
 
-DT = 0.01  # time tick [s]
+DT = 0.05  # time tick [s]
 MAX_RANGE = 20.0  # maximum observation range
 M_DIST_TH = 3.0  # Threshold of Mahalanobis distance for data association.
 STATE_SIZE = 3  # State size [x,y,yaw]
@@ -26,9 +29,9 @@ LM_SIZE = 2  # LM srate size [x,y]
 N_PARTICLE = 50  # number of particle
 NTH = N_PARTICLE / 1.5  # Number of particle for re-sampling
 
-STARTING_X = 1
+STARTING_X = 7.5
 STARTING_Y = 10.5
-STARTING_YAW = 0
+STARTING_YAW = np.pi/2
 
 # ~ Declare our Particle Agent ~
 class Particle:
@@ -42,20 +45,6 @@ class Particle:
         self.lm = np.zeros((N_LM, LM_SIZE))
         # landmark position covariance
         self.lmP = np.zeros((N_LM * LM_SIZE, LM_SIZE))
-
-# ~ Landmark Parameters ~
-#landmarks = [(4,2),(3,9),(4,9),(8,8),(12,10),(16,8),(20,2),(12,3),(8,5)]
-
-# Test Track A
-#landmarks = [(0,-1.5),(0.5,-1.5),(3,-1.5),(6,-1.5),(9,-1.5),(0,1.5),(0.5,1.5),(3,1.5),(6,1.5),(9,1.5)]
-
-# Test Track B
-sf = 0.9
-landmarks = [(0*sf,9),(0.5*sf,9),(3*sf,9),(6*sf,9),(9*sf,9),(12*sf,9),(15*sf,12),(15*sf,8.5),(0*sf,12),(0.5*sf,12),
-             (3*sf,12),(6*sf,12),(9*sf,12),(12*sf,12),(15*sf,12),(17.5*sf,11.5),(19.5*sf,10.5),(20.5*sf,9),(21*sf,7.5),(21*sf,6.5),
-             (20.5*sf,5),(19.5*sf,3.5)]
-
-n_landmarks = len(landmarks) # Number of landmarks in space
 
 # ~ Setting Up the sensor and odometry for the vehicle ~
 
@@ -99,7 +88,7 @@ def compute_weight(particle, z, Q):
     try:
         invS = np.linalg.inv(Sf)
     except np.linalg.linalg.LinAlgError:
-        print("singuler")
+        print("singular")
         return 1.0
 
     num = math.exp(-0.5 * dx.T @ invS @ dx)
@@ -152,17 +141,17 @@ def add_new_lm(particle, z, Q):
 
 # <--- Update Particle Kalman Filters --->
 def update_KF_with_cholesky(xf, Pf, v, Q, Hf):
-    PHt = Pf @ Hf.T
-    S = Hf @ PHt + Q
+    PHt = Pf.dot(np.transpose(Hf))
+    S = Hf.dot(PHt) + Q
 
-    S = (S + S.T) * 0.5
-    SChol = np.linalg.cholesky(S).T
+    S = (S + np.transpose(S)) * 0.5
+    SChol = np.transpose(np.linalg.cholesky(S))
     SCholInv = np.linalg.inv(SChol)
-    W1 = PHt @ SCholInv
-    W = W1 @ SCholInv.T
+    W1 = PHt.dot(SCholInv)
+    W = W1.dot(np.transpose(SCholInv))
 
-    x = xf + W @ v
-    P = Pf - W1 @ W1.T
+    x = xf + W.dot(v)
+    P = Pf - W1.dot(np.transpose(W1))
 
     return x, P
 
@@ -250,7 +239,6 @@ def resampling_step(particles):
     pw = np.array(pw)
 
     Neff = 1.0 / (pw @ pw.T)  # Effective particle number
-    # print(Neff)
 
     if Neff < NTH:  # resampling
         wcum = np.cumsum(pw)
@@ -342,49 +330,14 @@ def show_measurements(robot_pose,zs,env):
 
 # <--- End Plotting Functions --->
 
-if __name__=='__main__':
+# <--- Running the Simulation --->
 
-    N_LM = len(landmarks)
-    particles = [Particle(N_LM) for i in range(N_PARTICLE)]
-    history = []
-
-    # Initialize pygame
-    pygame.init()
-
-    # Initialize robot and time step
-    x_init = np.array([STARTING_X,STARTING_Y,STARTING_YAW])
-    robot = vehicles.DifferentialDrive(x_init)
-
-    # Initialize and display environment
-    env = environment.Environment(map_image_path="./python_ugv_sim/maps/map_blank.png")
-
-    running = True
-    u = np.array([0.,0.]) # Controls
-    while running:
-        for event in pygame.event.get():
-            if event.type==pygame.QUIT:
-                running = False
-            u = robot.update_u(u,event) if event.type==pygame.KEYUP or event.type==pygame.KEYDOWN else u # Update controls based on key states
-        robot.move_step(u,DT) # Integrate EOMs forward, i.e., move robot
-
-        zs = sim_measurements(robot.get_pose(),landmarks) # Get measurements
-
-        particles = prediction_step(particles, u.reshape(2,1)) 
-        history = deepcopy(particles) # Update my current history
-        particles = update_step(particles,zs)
-        particles = resampling_step(particles)
-
-        env.show_map() # Re-blit map
-        show_robot_sensor_range(robot.get_pose(),env) # Show the range of robot sensor
-        env.show_robot(robot) # Re-blit robot
-        show_measurements(robot.get_pose(),zs,env) # Draw a line to illustrate that the robot has "Seen" the landmark
-        show_landmarks(landmarks,env) # Display the landmarks
-
+def show_estimate(show_particles,show_point,history,particles,env):
+    if show_particles == True:
+        # THIS SHOWS EVERY INDIVIDUAL PARTICLE, LAG WARNING #
+        show_robot_estimate_as_particles(history,env)
+        show_landmark_estimate_as_particles(particles,env)
+    if show_point == True:
         show_robot_estimate_as_point(history,env)
         show_landmark_estimate_as_point(particles,env)
-
-        # THIS SHOWS EVERY INDIVIDUAL PARTICLE, LAG WARNING #
-        #show_robot_estimate_as_particles(history,env)
-        #show_landmark_estimate_as_particles(particles,env)
-
-        pygame.display.update() # Update display
+    return
