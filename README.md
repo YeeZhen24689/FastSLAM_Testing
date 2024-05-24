@@ -12,7 +12,7 @@ The main code file should be outside of the folder of which you downloaded the d
 Environment folder: <br />
 |_ fastSLAM.py <br />
 |_ venv <br />
-|_ python_ugv_sim <br />
+|_ python_ugv_sim (You need to edit a part of it - Check Using the code) <br />
 |_ main.py <br />
 |_ Tracks <br />
 &ensp;|_ comp_2021.csv <br />
