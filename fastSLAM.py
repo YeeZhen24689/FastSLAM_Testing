@@ -1,6 +1,6 @@
 import pygame
 import pygame.gfxdraw
-from main import N_LM
+from main import N_LM,STARTING_X,STARTING_Y,STARTING_YAW
 import math
 import numpy as np
 from copy import deepcopy
@@ -19,19 +19,15 @@ OFFSET_YAWRATE_NOISE = 0.01
 
 # ~ Simulation Set Up ~
 landmark_radius = 0.2
-robot_fov = 2
+robot_fov = 3
 
-DT = 0.05  # time tick [s]
+DT = 0.01  # time tick [s]
 MAX_RANGE = 20.0  # maximum observation range
 M_DIST_TH = 3.0  # Threshold of Mahalanobis distance for data association.
 STATE_SIZE = 3  # State size [x,y,yaw]
 LM_SIZE = 2  # LM srate size [x,y]
 N_PARTICLE = 50  # number of particle
 NTH = N_PARTICLE / 1.5  # Number of particle for re-sampling
-
-STARTING_X = 7.5
-STARTING_Y = 10.5
-STARTING_YAW = np.pi/2
 
 # ~ Declare our Particle Agent ~
 class Particle:

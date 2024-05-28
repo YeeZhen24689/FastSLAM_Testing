@@ -1,18 +1,6 @@
 import numpy as np
 
 # ~ Landmark Parameters ~
-# Test Space
-#landmarks = [(4,2),(3,9),(4,9),(8,8),(12,10),(16,8),(20,2),(12,3),(8,5)]
-
-# Test Track A
-#landmarks = [(0,-1.5),(0.5,-1.5),(3,-1.5),(6,-1.5),(9,-1.5),(0,1.5),(0.5,1.5),(3,1.5),(6,1.5),(9,1.5)]
-
-# Test Track B
-#sf = 0.9
-#landmarks = [(0*sf,9),(0.5*sf,9),(3*sf,9),(6*sf,9),(9*sf,9),(12*sf,9),(15*sf,12),(15*sf,8.5),(0*sf,12),(0.5*sf,12),
-#             (3*sf,12),(6*sf,12),(9*sf,12),(12*sf,12),(15*sf,12),(17.5*sf,11.5),(19.5*sf,10.5),(20.5*sf,9),(21*sf,7.5),(21*sf,6.5),
-#             (20.5*sf,5),(19.5*sf,3.5)]
-
 file_name = "comp_2021"
 file_extension = ".csv"
 
@@ -28,17 +16,22 @@ mapping = {"blue" : 0,
            "big_orange" : 3,
            "unknown" : 4}
 
+# Controlling how the landmarks are displayed
+sfx, sfy = 1, 1
+disp_x, disp_y = 20,17
+
+# Load the landmarks
 landmarks = []
-sfx, sfy = 1, 0.88
-disp_x, disp_y = 20,14.5
 for row in full_data:
   if row[0] in mapping:
     landmarks.append((float(row[1])*sfx+disp_x, float(row[2])*sfy+disp_y))
 
-#landmarks = [(4,2),(3,9),(4,9),(8,8),(12,10),(16,8),(20,2),(12,3),(8,5)]
-
 N_LM = len(landmarks)
+STARTING_X = 7.5
+STARTING_Y = 10.5
+STARTING_YAW = np.pi/2
 
+#from fastSLAM import *
 from fastSLAM import *
 from python_ugv_sim.utils import vehicles, environment
 
@@ -76,7 +69,7 @@ if __name__=='__main__':
         env.show_map() # Re-blit map
         show_robot_sensor_range(robot.get_pose(),env) # Show the range of robot sensor
         env.show_robot(robot) # Re-blit robot
-        show_measurements(robot.get_pose(),zs,env) # Draw a line to illustrate that the robot has "Seen" the landmark
+        #show_measurements(robot.get_pose(),zs,env) # Draw a line to illustrate that the robot has "Seen" the landmark
         show_landmarks(landmarks,env) # Display the landmarks
 
         show_estimate(show_particles=False,show_point=True,history=history,particles=particles,env=env)
