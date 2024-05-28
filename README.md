@@ -17,4 +17,4 @@ Environment folder: <br />
 |_ python_ugv_sim (You need to edit a part of it - Check Using the code) <br />
 |_ main.py <br />
 |_ Tracks <br />
-&ensp;|_ comp_2021.csv <br />
+&ensp;|_ You will see different tracks stored in here with .csv <br />
