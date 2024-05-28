@@ -5,7 +5,9 @@ Main pseudocode can be found in Probabilistic Robotics.
 
 # Using the Code
 The differential drive robot simulation environment used is: https://github.com/jacobhiggins/python_ugv_sim <br />
-For the simulation, go to python_ugv_sim/utils/environment.py and change METER_PER_PIXEL variable to 0.06 (Approx. Line 11)
+For the simulation: <br />
+1) Go to python_ugv_sim/utils/environment.py and change METER_PER_PIXEL variable to 0.06 (Approx. Line 11) <br />
+2) Go to python_ugv_sim/utils/vehicles.py and change max_v to 30m/s (Approx. Line 56), change max_omega to 15m/s (Approx. Line 57) <br />
 
 # Setting up the environment
 The main code file should be outside of the folder of which you downloaded the differential drive robot repo. <br />
