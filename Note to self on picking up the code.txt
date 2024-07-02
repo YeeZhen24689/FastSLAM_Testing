@@ -1,0 +1,14 @@
+Files : fastSLAM.py, main.py
+Note to self on picking up the code again
+
+If the detect_index() robot estimate input is 100% the robot input, the landmarks will be correct 100% of the time. The problem is that that will never be true, there are imperfections in the binomial distribution. 
+
+Currently the two functions to work on is on main.py, line 73 to 76. These are two ways I have tried to solve the problem:
+
+ 1) Computing the mean as the robot_estimate_pose this solution fails in the beginning because the particle filter has not fully initialized, but succeeds in every other metric (other than overly close points)
+
+ 2) Computing the mean as the most dense part of the probability distribution. This solution works perfectly in the beginning, but as the simulation accumulates more noise, or if the vehicle turns, it seems to fail. (Works on overly close points.)
+
+When picking it back up, brainstorm different ways to clean up the landmark to be as close to the true value as possible. Everything else works, I just wanna take a break from this fast slam this for awhile. 
+
+Yee Zhen 02 July 2024
