@@ -11,4 +11,16 @@ Currently the two functions to work on is on main.py, line 73 to 76. These are t
 
 When picking it back up, brainstorm different ways to clean up the landmark to be as close to the true value as possible. Everything else works, I just wanna take a break from this fast slam this for awhile. 
 
-Yee Zhen 02 July 2024
+/\---02 July 2024
+
+Files : fastSLAM.py, main.py
+Note to self on picking up the code again
+
+Made a few changes to the core part of the code to utilize both methods of extracting the mean, but this time the mean for the "bins" approach is used to stabilize the simulation before it has a grasp of the track, surprisingly it works 95% of the time. I wonder what else could I do to improve the mean interfacing capabilities of the system?
+
+15 minutes later...
+
+Wait I think I got it. The x and y data can be used to remove extremes in noise fluctuations. Yaw does not seem to have this issue. This might be it. The system is completed and it is somewhat competent in working in the simulation environment.
+
+/\-- 31 July 2024
+ 

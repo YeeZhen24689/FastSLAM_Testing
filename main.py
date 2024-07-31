@@ -56,8 +56,10 @@ if __name__=='__main__':
 
     running = True
     u = np.array([0.,0.]) # Controls
+    counter = 0 ; started = 0
 
     while running:
+
         for event in pygame.event.get():
             if event.type==pygame.QUIT:
                 running = False
@@ -65,16 +67,23 @@ if __name__=='__main__':
         robot.move_step(u,DT) # Integrate EOMs forward, i.e., move robot
 
         zs = sim_measurements(robot.get_pose(),landmarks) # Get measurements
-        zs = detect_index(robot.get_pose(),lm_estm,zs)
+        zs = detect_index(robot_estm_pose,lm_estm,zs)
         particles = prediction_step(particles, u.reshape(2,1)) 
         history = deepcopy(particles) # Update my current history
         particles = update_step(particles,zs)
         particles = resampling_step(particles)
-        if u[1] > 0 and u[0] > 1:
-            lm_estm,robot_estm_pose = compute_lm_and_robot_estm(particles) # Running this alone will make the beginning messed up
+
+        if u[0] == 0 and started == 0: # To switch to stable mode once the mean has stabilized
+            moving = 0
+            counter = 0
+
+        if counter < 90:
+            lm_estm,robot_estm_pose = compute_lm_and_robot_estm_2(particles)
+            counter += 1
         else:
-            lm_estm,robot_estm_pose = compute_lm_and_robot_estm_2(particles) # Running this alone will make the rest of the path messed up
-        
+            lm_estm,robot_estm_pose = compute_lm_and_robot_estm(particles) # Running this alone will make the beginning messed up
+            started  = 1
+
         env.show_map() # Re-blit map
         show_robot_sensor_range(robot.get_pose(),env) # Show the range of robot sensor
         env.show_robot(robot) # Re-blit robot

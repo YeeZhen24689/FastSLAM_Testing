@@ -47,10 +47,9 @@ class Particle:
 
 # ~ Measurement Simulation Function
 def sim_measurements(robot_pose,landmarks):
-    #print(lm_estm)
     rx, ry, rtheta = robot_pose[0], robot_pose[1], robot_pose[2]
     zs=np.zeros((2,0))
-    print("Next \/")
+    #print("Next \/")
     for landmark in landmarks: # Iterate over landamrks and inveces
         lx,ly = landmark
         dist = np.linalg.norm(np.array([lx-rx,ly-ry])) # Distance between robot and landmark
@@ -86,7 +85,7 @@ def norm2globalframe(rex,rey,dist,phi):
                                 [0],
                                 [1]])
     lm_final_shape = HB_R.dot(HR_L).dot(lm_final_shape) # Normalize from local robot frame to global frame
-    print("Next \___/")
+    #print("Next \___/")
     #print("[",lm_final_shape[0][0], lm_final_shape[1][0],"]")
     lm_xy = [lm_final_shape[0][0], lm_final_shape[1][0]]
     return lm_xy
@@ -117,7 +116,8 @@ def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
     
     #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
     if np.min(relatexy) < threshold: # Landmark is in "acceptable range"
-        index = np.where(relatexy == np.min(relatexy))[0][0] # Which row is this landmark in?
+        #index = np.where(relatexy == np.min(relatexy))[0][0] # Substitute for the row below
+        index = np.argmin(relatexy) # Which row is this landmark in?
         return index,new_landmarks_this_iter
     else:
         #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
@@ -203,9 +203,9 @@ def add_new_lm(particle, z, Q):
 
     particle.lm = np.vstack([particle.lm,[particle.x + r * c, particle.y + r * s]])
 
-    print("Add new lm -> [",particle.x + r * c, particle.y + r * s,"]")
+    #print("Add new lm -> [",particle.x + r * c, particle.y + r * s,"]")
     #print("(",particle.x + r * c,",",particle.y + r * s,")")
-    print("r = ",r," | b = ",b," | Particle Yaw = ",particle.yaw," | pyaw + b = ",particle.yaw + b)
+    #print("r = ",r," | b = ",b," | Particle Yaw = ",particle.yaw," | pyaw + b = ",particle.yaw + b)
 
     # covariance
     Gz = np.array([[c, -r * s],
@@ -287,7 +287,7 @@ def update_step(particles, zs):
     for iz in range(len(zs[0, :])):
 
         lmid = int(zs[2, iz])
-        print("Landmark_read")
+        #print("Landmark_read")
         for ip in range(N_PARTICLE):
             #print(lmid,len(particles[ip].lm))
             # new landmark
@@ -338,6 +338,59 @@ def resampling_step(particles):
 
     return particles
 
+# Drawing the mean of the robot pose as mean basis
+def compute_lm_and_robot_estm(particles):
+    # Special line of code to extract average landmark position represented by every particle
+    lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
+
+    rx_total = 0; ry_total = 0; ryaw_total = 0
+    for p in particles:
+        lm_total = np.add(p.lm,lm_total)
+        rx_total += p.x; ry_total += p.y; ryaw_total += p.yaw
+    lm_estm = np.divide(lm_total,N_PARTICLE)    
+
+    robot_estm_pose = [rx_total/N_PARTICLE,ry_total/N_PARTICLE,ryaw_total/N_PARTICLE]
+
+    rx_total = 0; ry_total = 0
+    rx_particle = 0; ry_particle = 0
+    for p in particles:
+        if robot_estm_pose[0]*0.5 < p.x < robot_estm_pose[0]*1.5:
+            rx_total += p.x
+            rx_particle += 1
+        if robot_estm_pose[1]*0.5 < p.y < robot_estm_pose[1]*1.5:
+            ry_total += p.y
+            ry_particle += 1
+
+    robot_estm_pose = [rx_total/rx_particle,ry_total/ry_particle,ryaw_total/N_PARTICLE]
+
+    return lm_estm,robot_estm_pose
+
+# Drawing the mean of the robot pose as highest-frequency basis
+def compute_lm_and_robot_estm_2(particles):
+    # Special line of code to extract average landmark position represented by every particle
+    lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
+
+    rx_total = []; ry_total = []; ryaw_total = []
+    for p in particles:
+        lm_total = np.add(p.lm,lm_total)
+        rx_total.append(p.x),ry_total.append(p.y),ryaw_total.append(p.yaw)
+
+    lm_estm = np.divide(lm_total,N_PARTICLE)
+
+    rx_hist,rx_bin = np.histogram(rx_total); ry_hist,ry_bin = np.histogram(rx_total); ryaw_hist,ryaw_bin = np.histogram(rx_total)
+    rx_max_index = np.where(rx_hist == np.max(rx_hist))[0][0]; ry_max_index = np.where(ry_hist == np.max(ry_hist))[0][0]; ryaw_max_index = np.where(ryaw_hist == np.max(ryaw_hist))[0][0]
+    rx_value = (rx_bin[rx_max_index] + rx_bin[rx_max_index+1])/2
+    ry_value = (ry_bin[ry_max_index] + ry_bin[ry_max_index+1])/2
+    ryaw_value = (ryaw_bin[ryaw_max_index] + ryaw_bin[ryaw_max_index+1])/2
+    
+    robot_estm_pose = [rx_value,ry_value,ryaw_value]
+
+    return lm_estm,robot_estm_pose
+
+# <--- End Key Particle Filter Functions --->
+
+# ~ Conversion Functions
+
 def pi_2_pi(angle): # Normalizer
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
@@ -356,7 +409,7 @@ def pol2cart(dist,theta):
     x,y = dist*np.cos(theta),dist*np.sin(theta)
     return x,y
 
-# ~ Plotting Functions ~ 
+# <--- Plotting Functions --->
 
 def show_robot_sensor_range(robot_pose,env):
     rx,ry,rtheta= robot_pose[0],robot_pose[1],robot_pose[2]
@@ -396,6 +449,34 @@ def show_robot_estimate_as_point(history,env):
     pos = (rx_avg,ry_avg)
     lx_pixel, ly_pixel = env.position2pixel(pos)
     pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,env.dist2pixellen(0.08),(255,0,0))
+
+def show_robot_estimate_as_phantom(history,env):
+    TRI_SIZE = 2
+    rx_total = 0; ry_total = 0; ryaw_total = 0
+
+    for p in history:
+        rx_total = rx_total + p.x
+        ry_total = ry_total + p.y
+        ryaw_total = ryaw_total + p.yaw
+
+    rx_avg = np.divide(rx_total,N_PARTICLE)
+    ry_avg = np.divide(ry_total,N_PARTICLE)
+    ryaw_total = np.divide(ryaw_total,N_PARTICLE)
+
+    #Triangle Calculations
+    centroid_dist = TRI_SIZE/(2*np.cos(np.deg2rad(22.5)))
+    pos = (rx_avg,ry_avg)
+    triangle_mat = np.array([[rx_avg,rx_avg-(TRI_SIZE*np.cos(np.deg2rad(22.5))),rx_avg+(TRI_SIZE*np.cos(np.deg2rad(22.5)))],
+                             [ry_avg+centroid_dist,ry_avg-(TRI_SIZE*np.sin(np.deg2rad(22.5))),ry_avg-(TRI_SIZE*np.sin(np.deg2rad(22.5)))]])
+    triangle_mat = np.array([[centroid_dist,-(TRI_SIZE*np.sin(np.deg2rad(22.5))),-(TRI_SIZE*np.sin(np.deg2rad(22.5)))],
+                             [0,-(TRI_SIZE*np.cos(np.deg2rad(22.5))),+(TRI_SIZE*np.cos(np.deg2rad(22.5)))]])
+    rotation = np.array([[np.cos(ryaw_total),-np.sin(ryaw_total)],[np.sin(ryaw_total),np.cos(ryaw_total)]])
+    rtm = rotation.dot(triangle_mat)
+    rtm[0,:] += rx_avg
+    rtm[1,:] += ry_avg
+    pos1 = (rtm[0][0],rtm[1][0]); pos2 = (rtm[0][1],rtm[1][1]); pos3 = (rtm[0][2],rtm[1][2])
+    lx_pixel1, ly_pixel1 = env.position2pixel(pos1); lx_pixel2, ly_pixel2 = env.position2pixel(pos2); lx_pixel3, ly_pixel3 = env.position2pixel(pos3)
+    pygame.gfxdraw.trigon(env.get_pygame_surface(),lx_pixel1,ly_pixel1,lx_pixel2,ly_pixel2,lx_pixel3,ly_pixel3,(255,0,0))
 
 def show_landmark_estimate_as_particles(particles,env):
     for p in particles:
@@ -437,41 +518,6 @@ def show_estimate(show_particles,show_point,history,particles,env):
         show_robot_estimate_as_particles(history,env)
         show_landmark_estimate_as_particles(particles,env)
     if show_point == True:
-        show_robot_estimate_as_point(history,env)
+        show_robot_estimate_as_phantom(history,env)
         show_landmark_estimate_as_point(particles,env)
     return
-
-def compute_lm_and_robot_estm(particles):
-    # Special line of code to extract average landmark position represented by every particle
-    lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
-
-    rx_total = 0; ry_total = 0; ryaw_total = 0
-    for p in particles:
-        lm_total = np.add(p.lm,lm_total)
-        rx_total += p.x; ry_total += p.y; ryaw_total += p.yaw
-    lm_estm = np.divide(lm_total,N_PARTICLE)    
-
-    robot_estm_pose = [rx_total/N_PARTICLE,ry_total/N_PARTICLE,ryaw_total/N_PARTICLE]
-
-    return lm_estm,robot_estm_pose
-
-def compute_lm_and_robot_estm_2(particles):
-    # Special line of code to extract average landmark position represented by every particle
-    lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
-
-    rx_total = []; ry_total = []; ryaw_total = []
-    for p in particles:
-        lm_total = np.add(p.lm,lm_total)
-        rx_total.append(p.x),ry_total.append(p.y),ryaw_total.append(p.yaw)
-
-    lm_estm = np.divide(lm_total,N_PARTICLE)
-
-    rx_hist,rx_bin = np.histogram(rx_total); ry_hist,ry_bin = np.histogram(rx_total); ryaw_hist,ryaw_bin = np.histogram(rx_total)
-    rx_max_index = np.where(rx_hist == np.max(rx_hist))[0][0]; ry_max_index = np.where(ry_hist == np.max(ry_hist))[0][0]; ryaw_max_index = np.where(ryaw_hist == np.max(ryaw_hist))[0][0]
-    rx_value = (rx_bin[rx_max_index] + rx_bin[rx_max_index+1])/2
-    ry_value = (ry_bin[ry_max_index] + ry_bin[ry_max_index+1])/2
-    ryaw_value = (ryaw_bin[ryaw_max_index] + ryaw_bin[ryaw_max_index+1])/2
-    
-    robot_estm_pose = [rx_value,ry_value,ryaw_value]
-
-    return lm_estm,robot_estm_pose
