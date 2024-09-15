@@ -1,6 +1,5 @@
 import pygame
 import pygame.gfxdraw
-from main import STARTING_X,STARTING_Y,STARTING_YAW
 import math
 import numpy as np
 from copy import deepcopy
@@ -29,6 +28,9 @@ STATE_SIZE = 3  # State size [x,y,yaw]
 LM_SIZE = 2  # LM srate size [x,y]
 N_PARTICLE = 50 # number of particle
 NTH = N_PARTICLE / 1.5  # Number of particle for re-sampling
+STARTING_X = 40
+STARTING_Y = 3
+STARTING_YAW = 0
 
 # ~ Declare our Particle Agent ~
 class Particle:
@@ -39,9 +41,9 @@ class Particle:
         self.y = STARTING_Y # Particle Location Y
         self.yaw = STARTING_YAW # Particle Yaw
         # landmark x-y positions
-        self.lm = np.zeros((1, LM_SIZE))
+        self.lm = np.zeros((0, LM_SIZE))
         # landmark position covariance
-        self.lmP = np.zeros((1 * LM_SIZE, LM_SIZE))
+        self.lmP = np.zeros((0 * LM_SIZE, LM_SIZE))
 
 # ~ Setting Up the sensor and odometry for the vehicle ~
 
@@ -66,31 +68,13 @@ def detect_index(robot_estm_pose,lm_estm,zs):
     new_landmarks_this_iter = 0 # Reset amount of landmarks I see this iteration
     for id,landmark_read in enumerate(np.transpose(zs)):
         dist = landmark_read[0]; phi = landmark_read[1]
-        cur_lm = norm2globalframe2(rex,rey,reyaw,dist,phi)
+        cur_lm = norm2globalframe(rex,rey,reyaw,dist,phi)
         lidx,new_landmarks_this_iter = loop_closure(lm_estm,cur_lm,new_landmarks_this_iter)
         lidx_append[0,id] = lidx
     zs = np.vstack((zs,lidx_append[0]))
     return zs
 
-def norm2globalframe(rex,rey,dist,phi):
-    #print("[",dist,phi,"]")
-    new_phi = normalize_2_polframe_lidar(phi)
-    HB_R = np.array([[1            ,0             ,rex],
-                        [0            ,1             ,rey],
-                        [0            ,0             ,1  ]])
-    HR_L = np.array([[np.cos(new_phi),-np.sin(new_phi),dist],
-                        [np.sin(new_phi),np.cos(new_phi) ,0   ],
-                        [0            ,0                 ,1   ]])
-    lm_final_shape = np.array([[0],
-                                [0],
-                                [1]])
-    lm_final_shape = HB_R.dot(HR_L).dot(lm_final_shape) # Normalize from local robot frame to global frame
-    #print("Next \___/")
-    #print("[",lm_final_shape[0][0], lm_final_shape[1][0],"]")
-    lm_xy = [lm_final_shape[0][0], lm_final_shape[1][0]]
-    return lm_xy
-
-def norm2globalframe2(rex,rey,reyaw,dist,phi):
+def norm2globalframe(rex,rey,reyaw,dist,phi):
 
     s = math.sin(pi_2_pi(reyaw + phi))
     c = math.cos(pi_2_pi(reyaw + phi))
@@ -117,23 +101,15 @@ def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
     #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
     if np.min(relatexy) < threshold: # Landmark is in "acceptable range"
         #index = np.where(relatexy == np.min(relatexy))[0][0] # Substitute for the row below
-        index = np.argmin(relatexy) # Which row is this landmark in?
-        return index,new_landmarks_this_iter
+        final_index = np.argmin(relatexy) # Which row is this landmark in?
     else:
-        #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
-        #print(relatexy)
-        #print("---")
-        #print(seen_landmarks)
-        #print("-----")
-        #print(norm_seen_landmarks)
-        #nums = input("Continue ->")
 
         index = np.nan # Some default if its a new landmark
         enumeratevar = new_landmarks_this_iter
         new_landmarks_this_iter += 1
         final_index = len(seen_landmarks)+enumeratevar
 
-        return final_index,new_landmarks_this_iter
+    return final_index,new_landmarks_this_iter
 
 def motion_model(x, u):
     F = np.array([[1.0, 0, 0],
@@ -365,49 +341,12 @@ def compute_lm_and_robot_estm(particles):
 
     return lm_estm,robot_estm_pose
 
-# Drawing the mean of the robot pose as highest-frequency basis
-def compute_lm_and_robot_estm_2(particles):
-    # Special line of code to extract average landmark position represented by every particle
-    lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
-
-    rx_total = []; ry_total = []; ryaw_total = []
-    for p in particles:
-        lm_total = np.add(p.lm,lm_total)
-        rx_total.append(p.x),ry_total.append(p.y),ryaw_total.append(p.yaw)
-
-    lm_estm = np.divide(lm_total,N_PARTICLE)
-
-    rx_hist,rx_bin = np.histogram(rx_total); ry_hist,ry_bin = np.histogram(rx_total); ryaw_hist,ryaw_bin = np.histogram(rx_total)
-    rx_max_index = np.where(rx_hist == np.max(rx_hist))[0][0]; ry_max_index = np.where(ry_hist == np.max(ry_hist))[0][0]; ryaw_max_index = np.where(ryaw_hist == np.max(ryaw_hist))[0][0]
-    rx_value = (rx_bin[rx_max_index] + rx_bin[rx_max_index+1])/2
-    ry_value = (ry_bin[ry_max_index] + ry_bin[ry_max_index+1])/2
-    ryaw_value = (ryaw_bin[ryaw_max_index] + ryaw_bin[ryaw_max_index+1])/2
-    
-    robot_estm_pose = [rx_value,ry_value,ryaw_value]
-
-    return lm_estm,robot_estm_pose
-
 # <--- End Key Particle Filter Functions --->
 
 # ~ Conversion Functions
 
 def pi_2_pi(angle): # Normalizer
     return (angle + math.pi) % (2 * math.pi) - math.pi
-
-def normalize_2_polframe_lidar(angle):
-    phase_shift_by_90 = angle + np.pi/2
-    if phase_shift_by_90 < 0:
-        phase_shift_by_90 = 2*np.pi + phase_shift_by_90
-    return phase_shift_by_90
-
-def normalize_2_polframe_robot(angle):
-    if angle < 0:
-        angle =  angle + 2*np.pi 
-    return angle
-
-def pol2cart(dist,theta):
-    x,y = dist*np.cos(theta),dist*np.sin(theta)
-    return x,y
 
 # <--- Plotting Functions --->
 
@@ -511,6 +450,29 @@ def show_measurements(robot_pose,zs,env):
 # <--- End Plotting Functions --->
 
 # <--- Running the Simulation --->
+
+def loadmap(file_name):
+    # ~ Landmark Parameters ~
+    file_extension = ".csv"
+
+    # Load the full data into separate arrays
+    full_data = np.loadtxt("Tracks/" + file_name + file_extension, delimiter=',', skiprows=1, usecols=(0, 1, 2), dtype=str)
+
+    # Controlling how the landmarks are displayed
+    sfx, sfy = 1, 1
+    disp_x, disp_y = 20,17
+
+    # Load the landmarks
+    landmarks = []
+    colour = []
+    for row in full_data:
+        if row[0] != "car_start":
+            landmarks.append((float(row[1])*sfx+disp_x, float(row[2])*sfy+disp_y))
+            colour.append(row[0])
+
+    #landmarks = [(11,10),(14,10),(20,30)]
+
+    return landmarks,colour
 
 def show_estimate(show_particles,show_point,history,particles,env):
     if show_particles == True:
