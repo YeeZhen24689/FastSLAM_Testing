@@ -94,8 +94,8 @@ def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
         b = np.vstack((target,b))
     #print("---------")
 
-    norm_seen_landmarks = np.power(abs(seen_landmarks) - abs(b),2) # Normalise the seen landmarks to look for correspondences
-    threshold = 0.8
+    norm_seen_landmarks = np.power(seen_landmarks - b,2) # Normalise the seen landmarks to look for correspondences
+    threshold = 0.75
     relatexy = norm_seen_landmarks[:,0] + norm_seen_landmarks[:,1] # Mark the correspondences between x and y as the sum
     
     #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
