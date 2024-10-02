@@ -22,13 +22,22 @@ if __name__=='__main__':
 
     running = True
     u = np.array([0.,0.]) # Controls
+    show = 0
 
     while running:
 
         for event in pygame.event.get():
             if event.type==pygame.QUIT:
                 running = False
-            u = robot.update_u(u,event) if event.type==pygame.KEYUP or event.type==pygame.KEYDOWN else u # Update controls based on key states
+            if event.type==pygame.KEYUP or event.type==pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    show = not show
+                    break
+                else: 
+                    u = robot.update_u(u,event)
+            else: 
+                u # Update controls based on key states
+         
         robot.move_step(u,DT) # Integrate EOMs forward, i.e., move robot
 
         zs = sim_measurements(robot.get_pose(),landmarks) # Get measurements
@@ -43,7 +52,8 @@ if __name__=='__main__':
         show_robot_sensor_range(robot.get_pose(),env) # Show the range of robot sensor
         env.show_robot(robot) # Re-blit robot
         show_measurements(robot.get_pose(),zs,env) # Draw a line to illustrate that the robot has "Seen" the landmark
-        show_landmarks(landmarks,env,colour) # Display the landmarks
+        if show == 1:
+            show_landmarks(landmarks,env,colour) # Display the landmarks
 
         show_estimate(show_particles=False,show_point=True,history=history,particles=particles,env=env)
 
