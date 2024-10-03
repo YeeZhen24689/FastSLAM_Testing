@@ -79,7 +79,7 @@ def norm2globalframe(rex,rey,reyaw,dist,phi):
     s = math.sin(pi_2_pi(reyaw + phi))
     c = math.cos(pi_2_pi(reyaw + phi))
 
-    lm_xy = [rex + dist * c, rey + dist * s]
+    lm_xy = np.array([rex + dist * c, rey + dist * s])
 
     #print(reyaw+phi)
     #print(lm_xy)
@@ -87,11 +87,9 @@ def norm2globalframe(rex,rey,reyaw,dist,phi):
     return lm_xy
 
 def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
-    target = np.array(current_landmark)
-    b = np.array(target)
-
-    for i in range(0,len(seen_landmarks)-1):
-        b = np.vstack((target,b))
+    bx = np.ones((len(seen_landmarks),1))*current_landmark[0]
+    by = np.ones((len(seen_landmarks),1))*current_landmark[1]
+    b = np.hstack((bx,by))
     #print("---------")
 
     norm_seen_landmarks = np.power(seen_landmarks - b,2) # Normalise the seen landmarks to look for correspondences
