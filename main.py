@@ -22,7 +22,7 @@ if __name__=='__main__':
 
     running = True
     u = np.array([0.,0.]) # Controls
-    show = 0
+    show = 1
 
     while running:
 

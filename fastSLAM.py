@@ -4,6 +4,8 @@ import math
 import numpy as np
 from copy import deepcopy
 import os
+import random
+from PIL import Image,ImageDraw
 
 clear = lambda : os.system('cls')
 
@@ -31,6 +33,15 @@ NTH = N_PARTICLE / 1.5  # Number of particle for re-sampling
 STARTING_X = 40
 STARTING_Y = 3
 STARTING_YAW = 0
+SENSOR_FOV_ANGLE = np.pi/3
+
+# <--- SIM NOISE & LOOP CLOSURE CONTROLS --->
+LOOP_CLOSURE_THRESHOLD = 0.75
+DIVISION_FACTOR = 1000
+SKEW = 3
+SKEW_ON = 0; RANDOM_NOISE_ON = 0
+RANDOM_NOISE_LB = -1; RANDOM_NOISE_UB = 1
+# <--- END SIM NOISE & LOOP CLOSURE CONTROLS --->
 
 # ~ Declare our Particle Agent ~
 class Particle:
@@ -57,9 +68,10 @@ def sim_measurements(robot_pose,landmarks):
         dist = np.linalg.norm(np.array([lx-rx,ly-ry])) # Distance between robot and landmark
         phi = np.arctan2(ly-ry,lx-rx) - rtheta # Angle between robot heading and landmark
         phi = np.arctan2(np.sin(phi),np.cos(phi)) # Normalize the angle between pi and -pi
-        if dist <= robot_fov: # Only append if observation is in the robot's field of view
+        if dist <= robot_fov and abs(phi) <= SENSOR_FOV_ANGLE: # Only append if observation is in the robot's field of view
             zs_add = np.array([dist,phi]).reshape(2,1)
             zs = np.hstack((zs,zs_add))
+            #zs = add_noise(zs,SKEW,RANDOM_NOISE_LB,RANDOM_NOISE_UB)
     return zs
 
 def detect_index(robot_estm_pose,lm_estm,zs):
@@ -93,7 +105,7 @@ def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
     #print("---------")
 
     norm_seen_landmarks = np.power(seen_landmarks - b,2) # Normalise the seen landmarks to look for correspondences
-    threshold = 0.75
+    threshold = LOOP_CLOSURE_THRESHOLD
     relatexy = norm_seen_landmarks[:,0] + norm_seen_landmarks[:,1] # Mark the correspondences between x and y as the sum
     
     #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
@@ -324,7 +336,7 @@ def compute_lm_and_robot_estm(particles):
     lm_estm = np.divide(lm_total,N_PARTICLE)    
 
     robot_estm_pose = [rx_total/N_PARTICLE,ry_total/N_PARTICLE,ryaw_total/N_PARTICLE]
-
+    '''
     rx_total = 0; ry_total = 0
     rx_particle = 0; ry_particle = 0
     for p in particles:
@@ -336,7 +348,7 @@ def compute_lm_and_robot_estm(particles):
             ry_particle += 1
 
     robot_estm_pose = [rx_total/rx_particle,ry_total/ry_particle,ryaw_total/N_PARTICLE]
-
+    '''
     return lm_estm,robot_estm_pose
 
 # <--- End Key Particle Filter Functions --->
@@ -346,15 +358,31 @@ def compute_lm_and_robot_estm(particles):
 def pi_2_pi(angle): # Normalizer
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
+# <--- Noise Machine --->and abs(phi) < SENSOR_FOV_ANGLE:
+def add_noise(array,skew,lower_bound,upper_bound):
+    for i in range(array.shape[0]):
+        for j in range(array.shape[1]): 
+            if RANDOM_NOISE_ON == 1:
+                array[i][j] += random.randint(lower_bound,upper_bound)/DIVISION_FACTOR
+            elif SKEW_ON == 1:
+                array[i][j] += skew/DIVISION_FACTOR
+            else:
+                break
+    return array
+#<--- END NOISE MACHINE --->
+
 # <--- Plotting Functions --->
 
 def show_robot_sensor_range(robot_pose,env):
+    range = (robot_fov/3)*80
     rx,ry,rtheta= robot_pose[0],robot_pose[1],robot_pose[2]
     sensor_radius = env.dist2pixellen(robot_fov-landmark_radius) # Take the actual robot radius
     rx_pix,ry_pix = env.position2pixel((rx,ry)) # Take the size of the map, figure out x and y based on the map
     #pygame.gfxdraw.line(env.get_pygame_surface(),rx_pix,ry_pix,int(rx_pix+np.cos(rtheta)),int(ry_pix+(sensor_radius**2)*np.cos(rtheta)),(255,255,153))
-    pygame.gfxdraw.filled_circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(255,255,153)) # Last statement probably colour
-    pygame.gfxdraw.circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(0,0,153)) # Last statement probably colour
+    rect = pygame.rect.Rect(rx_pix-range/2,ry_pix-range/2,range,range)
+    #pygame.gfxdraw.filled_circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(255,255,153)) # Last statement probably colour
+    #pygame.gfxdraw.circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(0,0,153)) # Last statement probably colour
+    pygame.draw.arc(env.get_pygame_surface(),(0,0,0),rect,pi_2_pi(rtheta-SENSOR_FOV_ANGLE),pi_2_pi(rtheta+SENSOR_FOV_ANGLE))
 
 # ~ Plot Landmarks ~
 def show_landmarks(landmarks,env,colour):
