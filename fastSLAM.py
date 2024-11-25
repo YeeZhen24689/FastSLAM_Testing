@@ -11,7 +11,7 @@ clear = lambda : os.system('cls')
 
 # Fast SLAM covariance
 Q = np.diag([3.0, np.deg2rad(10.0)])**2
-R = np.diag([1.0, np.deg2rad(20.0)])**2
+R = np.diag([0.1, np.deg2rad(2.0)])**2
 
 #  Simulation parameter
 Qsim = np.diag([0.3, np.deg2rad(2.0)])**2
@@ -23,7 +23,7 @@ landmark_radius = 0.2
 robot_fov = 3
 landmark_counter = 0
 
-DT = 0.01  # time tick [s]
+DT = 0.1  # time tick [s]
 MAX_RANGE = 20.0  # maximum observation range
 M_DIST_TH = 3.0  # Threshold of Mahalanobis distance for data association.
 STATE_SIZE = 3  # State size [x,y,yaw]
