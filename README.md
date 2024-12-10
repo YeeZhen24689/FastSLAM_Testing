@@ -1,7 +1,11 @@
 # FastSLAM_Testing
 The Goal of this Repo is to implement FastSLAM 1.0 on a differential drive robot to simulate its usage for mapping on a racecar.
+
 Part of the implementation is taken from https://atsushisakai.github.io/PythonRobotics/modules/slam/FastSLAM1/FastSLAM1.html.
-Main pseudocode can be found in Probabilistic Robotics.
+Main pseudocode can be found in Probabilistic Robotics. Below are a few examples of the simulator in action:
+
+![Screenshot from 2024-12-10 11-24-09](https://github.com/user-attachments/assets/6077afee-4d27-4af9-8013-1abb758d9c12)
+![Screenshot from 2024-12-10 11-28-17](https://github.com/user-attachments/assets/484d1241-41bb-4379-b037-595ea18fe597)
 
 # Using the Code
 The differential drive robot simulation environment used is: https://github.com/jacobhiggins/python_ugv_sim <br />
