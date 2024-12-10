@@ -9,9 +9,18 @@ from PIL import Image,ImageDraw
 
 clear = lambda : os.system('cls')
 
+##----------------------------------##
+##-----------Conventions------------##
+##----------------------------------##
+#  Blue Cone - 0
+#  Yellow Cone - 1
+#  Orange -2
+#  Big Orange - 3
+#  Unknown - 4
+
 # Fast SLAM covariance
 Q = np.diag([3.0, np.deg2rad(10.0)])**2
-R = np.diag([0.1, np.deg2rad(2.0)])**2
+R = np.diag([0.1, np.deg2rad(1.0)])**2
 
 #  Simulation parameter
 Qsim = np.diag([0.3, np.deg2rad(2.0)])**2
@@ -30,13 +39,14 @@ STATE_SIZE = 3  # State size [x,y,yaw]
 LM_SIZE = 2  # LM srate size [x,y]
 N_PARTICLE = 50 # number of particle
 NTH = N_PARTICLE / 1.5  # Number of particle for re-sampling
-STARTING_X = 40
+STARTING_X = 37.5
 STARTING_Y = 3
 STARTING_YAW = 0
 SENSOR_FOV_ANGLE = np.pi/3
+LIDAR_FOV_ANGLE = 2*np.pi/3
 
 # <--- SIM NOISE & LOOP CLOSURE CONTROLS --->
-LOOP_CLOSURE_THRESHOLD = 0.75
+LOOP_CLOSURE_THRESHOLD = 0.5
 DIVISION_FACTOR = 1000
 SKEW = 3
 SKEW_ON = 0; RANDOM_NOISE_ON = 0
@@ -61,17 +71,20 @@ class Particle:
 # ~ Measurement Simulation Function
 def sim_measurements(robot_pose,landmarks):
     rx, ry, rtheta = robot_pose[0], robot_pose[1], robot_pose[2]
-    zs=np.zeros((2,0))
+    zs=np.zeros((3,0))
     #print("Next \/")
     for landmark in landmarks: # Iterate over landamrks and inveces
-        lx,ly = landmark
+        lx,ly,colour = landmark
         dist = np.linalg.norm(np.array([lx-rx,ly-ry])) # Distance between robot and landmark
         phi = np.arctan2(ly-ry,lx-rx) - rtheta # Angle between robot heading and landmark
         phi = np.arctan2(np.sin(phi),np.cos(phi)) # Normalize the angle between pi and -pi
-        if dist <= robot_fov and abs(phi) <= SENSOR_FOV_ANGLE: # Only append if observation is in the robot's field of view
-            zs_add = np.array([dist,phi]).reshape(2,1)
+        if dist <= robot_fov and abs(phi) <= SENSOR_FOV_ANGLE: # Only append if observation is in the ZED Cam's field of view
+            zs_add = np.array([dist,phi,colour]).reshape(3,1)
             zs = np.hstack((zs,zs_add))
             #zs = add_noise(zs,SKEW,RANDOM_NOISE_LB,RANDOM_NOISE_UB)
+        elif dist <= robot_fov and abs(phi) <= LIDAR_FOV_ANGLE: # Only append if observation is in the robot'LIDAR's field of view
+            zs_add = np.array([dist,phi,4]).reshape(3,1)
+            zs = np.hstack((zs,zs_add))
     return zs
 
 def detect_index(robot_estm_pose,lm_estm,zs):
@@ -79,12 +92,19 @@ def detect_index(robot_estm_pose,lm_estm,zs):
     lidx_append = np.zeros((1,len(zs[0,:])))
     new_landmarks_this_iter = 0 # Reset amount of landmarks I see this iteration
     for id,landmark_read in enumerate(np.transpose(zs)):
-        dist = landmark_read[0]; phi = landmark_read[1]
+        dist = landmark_read[0]; phi = landmark_read[1]; colour = landmark_read[2]
         cur_lm = norm2globalframe(rex,rey,reyaw,dist,phi)
         lidx,new_landmarks_this_iter = loop_closure(lm_estm,cur_lm,new_landmarks_this_iter)
         lidx_append[0,id] = lidx
     zs = np.vstack((zs,lidx_append[0]))
     return zs
+
+def get_cone_colours(zs):
+    colours_I_see = []
+    for i in zs[2,:]:
+        if i not in colours_I_see:
+            colours_I_see.append(i)
+    return colours_I_see
 
 def norm2globalframe(rex,rey,reyaw,dist,phi):
 
@@ -102,22 +122,27 @@ def loop_closure(seen_landmarks,current_landmark,new_landmarks_this_iter):
     bx = np.ones((len(seen_landmarks),1))*current_landmark[0]
     by = np.ones((len(seen_landmarks),1))*current_landmark[1]
     b = np.hstack((bx,by))
-    #print("---------")
 
     norm_seen_landmarks = np.power(seen_landmarks - b,2) # Normalise the seen landmarks to look for correspondences
     threshold = LOOP_CLOSURE_THRESHOLD
     relatexy = norm_seen_landmarks[:,0] + norm_seen_landmarks[:,1] # Mark the correspondences between x and y as the sum
     
     #print(seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][0],seen_landmarks[np.where(relatexy == np.min(relatexy))[0][0]][1],np.min(relatexy),str(current_landmark[0]),str(current_landmark[1]))
-    if np.min(relatexy) < threshold: # Landmark is in "acceptable range"
-        #index = np.where(relatexy == np.min(relatexy))[0][0] # Substitute for the row below
-        final_index = np.argmin(relatexy) # Which row is this landmark in?
-    else:
-
+    try:
+        if np.min(relatexy) < threshold: # Landmark is in "acceptable range"
+            #index = np.where(relatexy == np.min(relatexy))[0][0] # Substitute for the row below
+            final_index = np.argmin(relatexy) # Which row is this landmark in?
+        else:
+            index = np.nan # Some default if its a new landmark
+            enumeratevar = new_landmarks_this_iter
+            new_landmarks_this_iter += 1
+            final_index = len(seen_landmarks)+enumeratevar
+    except ValueError:
         index = np.nan # Some default if its a new landmark
         enumeratevar = new_landmarks_this_iter
         new_landmarks_this_iter += 1
         final_index = len(seen_landmarks)+enumeratevar
+        pass
 
     return final_index,new_landmarks_this_iter
 
@@ -137,7 +162,7 @@ def motion_model(x, u):
 # <--- Compute Weight --->
 # Compute the weight of the particles
 def compute_weight(particle, z, Q):
-    lm_id = int(z[2])
+    lm_id = int(z[3])
     xf = np.array(particle.lm[lm_id, :]).reshape(2, 1)
     Pf = np.array(particle.lmP[2 * lm_id:2 * lm_id + 2])
     zp, Hv, Hf, Sf = compute_jacobians(particle, xf, Pf, Q)
@@ -182,7 +207,8 @@ def add_new_lm(particle, z, Q):
 
     r = z[0]
     b = z[1]
-    lm_id = int(z[2])
+    c = z[2]
+    lm_id = int(z[3])
 
     s = math.sin(pi_2_pi(particle.yaw + b))
     c = math.cos(pi_2_pi(particle.yaw + b))
@@ -219,7 +245,7 @@ def update_KF_with_cholesky(xf, Pf, v, Q, Hf):
 
 def update_landmark(particle, z, Q):
 
-    lm_id = int(z[2])
+    lm_id = int(z[3])
     xf = np.array(particle.lm[lm_id, :]).reshape(2, 1)
     Pf = np.array(particle.lmP[2 * lm_id:2 * lm_id + 2, :])
 
@@ -269,23 +295,29 @@ def prediction_step(particles, u):
     return particles
 
 # Update the particles with the observation
-def update_step(particles, zs):
+def update_step(particles, zs, colour_matrix):
+    new_landmark = 0
     for iz in range(len(zs[0, :])):
 
-        lmid = int(zs[2, iz])
+        lmid = int(zs[3, iz])
+        lmc = int(zs[2, iz])
         #print("Landmark_read")
         for ip in range(N_PARTICLE):
             #print(lmid,len(particles[ip].lm))
             # new landmark
             if lmid >= len(particles[ip].lm):
                 particles[ip] = add_new_lm(particles[ip], zs[:, iz], Q)
-            # known landmark
+                new_landmark = 1
             else:
                 w = compute_weight(particles[ip], zs[:, iz], Q)
                 particles[ip].w *= w
                 particles[ip] = update_landmark(particles[ip], zs[:, iz], Q)
-
-    return particles
+                new_landmark = 0
+        if new_landmark == 1:
+            colour_matrix.append(lmc)
+        elif colour_matrix[lmid] == 4 and lmc != 4:
+            colour_matrix[lmid] = lmc
+    return particles,colour_matrix
 
 # Resample by removing redundant particles
 def resampling_step(particles):
@@ -382,18 +414,21 @@ def show_robot_sensor_range(robot_pose,env):
     rect = pygame.rect.Rect(rx_pix-range/2,ry_pix-range/2,range,range)
     #pygame.gfxdraw.filled_circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(255,255,153)) # Last statement probably colour
     #pygame.gfxdraw.circle(env.get_pygame_surface(),rx_pix,ry_pix,sensor_radius,(0,0,153)) # Last statement probably colour
-    pygame.draw.arc(env.get_pygame_surface(),(0,0,0),rect,pi_2_pi(rtheta-SENSOR_FOV_ANGLE),pi_2_pi(rtheta+SENSOR_FOV_ANGLE))
+    pygame.draw.arc(env.get_pygame_surface(),(255,255,255),rect,pi_2_pi(rtheta-SENSOR_FOV_ANGLE),pi_2_pi(rtheta+SENSOR_FOV_ANGLE))
 
 # ~ Plot Landmarks ~
-def show_landmarks(landmarks,env,colour):
+def show_landmarks(landmarks,env):
     for id,landmark in enumerate(landmarks):
-        lx_pixel, ly_pixel = env.position2pixel(landmark)
+        lx_pixel, ly_pixel = env.position2pixel(landmark[0:2])
+        c_pixel = landmark[2]
         r_pixel = env.dist2pixellen(landmark_radius) # Radius of the circle
-        if colour[id] == 'blue':
+        if c_pixel == 0:
             pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,r_pixel,(0,191,255)) # Last statement probably colour
-        elif colour[id] == 'yellow':
+        elif c_pixel == 1:
             pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,r_pixel,(238,210,2)) # Last statement probably colour
-        elif colour[id] == 'big_orange':
+        elif c_pixel == 2:
+            pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,r_pixel,(255,165,0)) # Last statement probably colour
+        elif c_pixel == 3:
             pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,r_pixel,(255,165,0)) # Last statement probably colour
         else:
             pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,r_pixel,(0,0,0)) # Last statement probably colour
@@ -450,16 +485,17 @@ def show_landmark_estimate_as_particles(particles,env):
             lx_pixel, ly_pixel = env.position2pixel(pos)
             pygame.gfxdraw.pixel(env.get_pygame_surface(),lx_pixel,ly_pixel,(255,0,0))
 
-def show_landmark_estimate_as_point(particles,env):
+def show_landmark_estimate_as_point(particles,env,c_matrix):
+    # Definition Dictionary
+    colour_code = [(144,213,255),(255,255,0),(255,165,0),(0,128,0),(255,255,255)]
     lm_total = np.zeros((len(particles[0].lm), LM_SIZE))
     for p in particles:
         lm_total = np.add(p.lm,lm_total)
     lm_avg = np.divide(lm_total,N_PARTICLE)
-    for lm in lm_avg:
+    for i,lm in enumerate(lm_avg):
         pos = (lm[0],lm[1])
         lx_pixel, ly_pixel = env.position2pixel(pos)
-        pygame.gfxdraw.pixel(env.get_pygame_surface(),lx_pixel,ly_pixel,(255,0,0))
-        pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,env.dist2pixellen(0.08),(0,0,0))
+        pygame.gfxdraw.filled_circle(env.get_pygame_surface(),lx_pixel,ly_pixel,env.dist2pixellen(0.08),colour_code[c_matrix[i]])
 
 # ~ Plot Sensor Measurement ~
 def show_measurements(robot_pose,zs,env):
@@ -478,34 +514,39 @@ def show_measurements(robot_pose,zs,env):
 # <--- Running the Simulation --->
 
 def loadmap(file_name):
-    # ~ Landmark Parameters ~
+    # Definition Dictionary
+    cones = {"blue"       : 0,
+             "yellow"     : 1,
+             "orange"     : 2,
+             "big_orange" : 3,
+             "midpoint"   : 4,}
+
+    # ~ Landmark Parameters ~"big_orange" : 2,
     file_extension = ".csv"
 
     # Load the full data into separate arrays
     full_data = np.loadtxt("Tracks/" + file_name + file_extension, delimiter=',', skiprows=1, usecols=(0, 1, 2), dtype=str)
 
     # Controlling how the landmarks are displayed
-    sfx, sfy = 1, 1
-    disp_x, disp_y = 20,17
+    sfx, sfy = 1, 0.95
+    disp_x, disp_y = 20,16
 
     # Load the landmarks
     landmarks = []
-    colour = []
     for row in full_data:
         if row[0] != "car_start":
-            landmarks.append((float(row[1])*sfx+disp_x, float(row[2])*sfy+disp_y))
-            colour.append(row[0])
+            landmarks.append((float(row[1])*sfx+disp_x, float(row[2])*sfy+disp_y,cones[row[0]]))
 
     #landmarks = [(11,10),(14,10),(20,30)]
 
-    return landmarks,colour
+    return landmarks
 
-def show_estimate(show_particles,show_point,history,particles,env):
+def show_estimate(show_particles,show_point,history,particles,env,c_matrix):
     if show_particles == True:
         # THIS SHOWS EVERY INDIVIDUAL PARTICLE, LAG WARNING #
         show_robot_estimate_as_particles(history,env)
         show_landmark_estimate_as_particles(particles,env)
     if show_point == True:
         show_robot_estimate_as_phantom(history,env)
-        show_landmark_estimate_as_point(particles,env)
+        show_landmark_estimate_as_point(particles,env,c_matrix)
     return

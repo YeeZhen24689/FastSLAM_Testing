@@ -1,0 +1,6 @@
+This is here to document the changes I make to the ugv_sim library I am using to run the file
+
+Under ugv_sim/maps, replace the blank map with the black one I have in this file
+Under ugv_sim/utils/environment.py, change the METER_PER_PIXEL variable to 0.065
+
+You can modify the speed of the vehicle in ugv_sim/utils/vehicles.py
